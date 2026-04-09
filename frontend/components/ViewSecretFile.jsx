@@ -1,14 +1,19 @@
-'use client';
-
 import {useState, useEffect} from 'react';
-import {useRouter} from 'next/navigation';
 import {Constants} from '../utils/util';
 import {hashSecretKey} from '../utils/protocol.mjs';
 import {getFile} from '../utils/fileApi';
 import {decryptFile, downloadFile} from '../utils/fileProtocol';
 
+function goToShareMode(mode) {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    window.sessionStorage.setItem('shareMode', mode);
+    window.location.assign('/');
+}
+
 export default function ViewSecretFile() {
-    const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
     const [isDownloaded, setIsDownloaded] = useState(false);
     const [secretKey, setSecretKey] = useState('');
@@ -144,7 +149,7 @@ export default function ViewSecretFile() {
                             <button
                                 className="btn btn-primary"
                                 type="button"
-                                onClick={() => router.push('/secure-file-sharing/')}
+                                onClick={() => goToShareMode('file')}
                             >
                                 Share a file
                             </button>
@@ -159,19 +164,13 @@ export default function ViewSecretFile() {
                         <button
                             className="btn btn-primary"
                             type="button"
-                            onClick={() => router.push('/secure-file-sharing/')}
+                            onClick={() => goToShareMode('file')}
                         >
                             Share a file
                         </button>
                     </div>
                 )}
             </form>
-            <div className="view-powered-by">
-                <a href="https://1time.io" target="_blank" rel="noopener noreferrer">
-                    Powered by <strong>1time.io</strong>
-                </a>
-                <span className="view-powered-by-tagline">Free, open-source, zero-knowledge encryption. Your files are encrypted in the browser — the server never sees them.</span>
-            </div>
         </div>
     );
 }

@@ -1,9 +1,16 @@
+import {getEnvValue} from './env';
+
 export const siteHostDefault = '1time.io';
-export const siteHost = process.env.NEXT_PUBLIC_SITE_HOST || siteHostDefault;
-export const siteUrl = `https://${siteHost}`;
+export const siteHost = typeof window !== 'undefined' && window.location?.host
+    ? window.location.host
+    : getEnvValue('VITE_SITE_HOST', siteHostDefault);
+
+export const siteUrl = typeof window !== 'undefined' && window.location?.origin
+    ? window.location.origin
+    : `https://${siteHost}`;
 
 export function isBlogEnabled() {
-    return process.env.NEXT_PUBLIC_SHOW_BLOG !== 'false';
+    return getEnvValue('VITE_SHOW_BLOG', 'false') !== 'false';
 }
 
 export function absoluteUrl(path = '/') {

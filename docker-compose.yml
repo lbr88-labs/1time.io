@@ -1,7 +1,7 @@
-## Deploy with pre-built images from GHCR (no build required)
+## Deploy with your own pre-built images from GHCR (no local build required)
 ## Usage:
 ##   cp .env.example .env
-##   # Edit .env: set APP_HOSTNAME to your domain
+##   # Edit .env: set APP_HOSTNAME plus pinned BACKEND_IMAGE / WEB_IMAGE refs
 ##   docker compose up -d
 
 services:
@@ -23,7 +23,7 @@ services:
       - ${DATA_DIR:-./data}:/data
 
   backend:
-    image: ghcr.io/shingrus/1time-backend:latest
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to your pinned ghcr.io/<owner>/1time-backend image ref}
     restart: unless-stopped
     environment:
       LISTEN_ADDR: 0.0.0.0:8080
@@ -36,7 +36,7 @@ services:
       - redis
 
   web:
-    image: ghcr.io/shingrus/1time-web:latest
+    image: ${WEB_IMAGE:?Set WEB_IMAGE to your pinned ghcr.io/<owner>/1time-web image ref}
     restart: unless-stopped
     environment:
       APP_HOSTNAME: ${APP_HOSTNAME:-1time.io}

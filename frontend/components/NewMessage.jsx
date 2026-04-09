@@ -1,7 +1,6 @@
-'use client';
-
 import {lazy, Suspense, useState} from "react";
 import {Constants, createSecretLink, SHARE_DURATION_OPTIONS} from '../utils/util';
+import {generateShortPassphrase} from '../utils/passphrase';
 
 const ShowNewLink = lazy(() => import('./ShowNewLink'));
 
@@ -18,7 +17,19 @@ export default function NewMessage() {
     const [secretKey, setSecretKey] = useState("");
     const [duration, setDuration] = useState(Constants.defaultDuration);
     const [isLoading, setIsLoading] = useState(false);
+    const [isGeneratingPassphrase, setIsGeneratingPassphrase] = useState(false);
     const [newLink, setNewLink] = useState("");
+
+    const handleGeneratePassphrase = async () => {
+        setIsGeneratingPassphrase(true);
+
+        try {
+            setSecretKey(await generateShortPassphrase());
+        } catch (error) {
+        } finally {
+            setIsGeneratingPassphrase(false);
+        }
+    };
 
     const handleSubmit = async (event) => {
         event.preventDefault();
@@ -81,7 +92,17 @@ export default function NewMessage() {
 
             <div className="options-grid">
                 <div className="form-field" style={{marginBottom: 0}}>
-                    <label className="form-label" htmlFor="secretKey">Additional passphrase</label>
+                    <div className="form-label-row">
+                        <label className="form-label" htmlFor="secretKey">Additional passphrase</label>
+                        <button
+                            className="passphrase-generate-btn"
+                            type="button"
+                            onClick={handleGeneratePassphrase}
+                            disabled={isGeneratingPassphrase}
+                        >
+                            {isGeneratingPassphrase ? 'Generating...' : 'Generate one'}
+                        </button>
+                    </div>
                     <input
                         className="form-input"
                         id="secretKey"

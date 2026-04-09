@@ -1,12 +1,17 @@
-'use client';
-
 import {useState, useEffect} from 'react';
-import {useRouter} from "next/navigation";
 import {Constants, copyTextToClipboard, decryptSecretMessage, hashSecretKey, postJson} from '../utils/util';
 import {createQrSvg} from '../utils/qr';
 
+function goToShareMode(mode) {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    window.sessionStorage.setItem('shareMode', mode);
+    window.location.assign('/');
+}
+
 export default function ViewSecretMessage() {
-    const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
     const [secretMessage, setSecretMessage] = useState("");
     const [secretKey, setSecretKey] = useState("");
@@ -241,7 +246,7 @@ export default function ViewSecretMessage() {
                         <button
                             className="btn btn-primary"
                             type="button"
-                            onClick={() => router.push('/')}
+                            onClick={() => goToShareMode('text')}
                         >
                             Create your own secret link
                         </button>
@@ -258,7 +263,7 @@ export default function ViewSecretMessage() {
                             <button
                                 className="btn btn-primary"
                                 type="button"
-                                onClick={() => router.push('/')}
+                                onClick={() => goToShareMode('text')}
                             >
                                 Create a secure link
                             </button>

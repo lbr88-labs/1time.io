@@ -1,275 +1,147 @@
-<p align="center">
-  <a href="https://1time.io">
-    <img src="frontend/public/og-image.png" alt="1time.io" width="400">
-  </a>
-</p>
+# 1time.io Fork
 
-<p align="center">
-  <strong>Zero-knowledge one-time secret sharing with end-to-end encryption</strong><br>
-  Share passwords, API keys, sensitive text, and encrypted files through self-destructing links.
-</p>
+Minimal self-hosted secret handoff for text and files.
 
-<p align="center">
-  <a href="https://1time.io"><img src="https://img.shields.io/badge/Try_it_live-1time.io-E8552D?style=for-the-badge" alt="Try it live"></a>
-  &nbsp;
-  <a href="https://www.npmjs.com/package/@1time/cli"><img src="https://img.shields.io/badge/CLI-npm_install_@1time/cli-CB3837?style=for-the-badge&logo=npm" alt="CLI"></a>
-</p>
+This fork keeps the upstream crypto and backend model, but strips the frontend down to the core flow and publishes its own pinned GHCR images.
 
-<p align="center">
-  <a href="https://github.com/shingrus/1time/blob/master/LICENSE"><img src="https://img.shields.io/github/license/shingrus/1time?style=flat-square" alt="License"></a>
-  <a href="https://github.com/shingrus/1time/releases"><img src="https://img.shields.io/github/v/release/shingrus/1time?style=flat-square" alt="Release"></a>
-  <a href="https://www.npmjs.com/package/@1time/cli"><img src="https://img.shields.io/npm/v/@1time/cli?style=flat-square&label=cli" alt="npm"></a>
-  <a href="https://github.com/shingrus/1time/stargazers"><img src="https://img.shields.io/github/stars/shingrus/1time?style=flat-square" alt="Stars"></a>
-  <a href="https://github.com/shingrus/1time"><img src="https://img.shields.io/github/last-commit/shingrus/1time?style=flat-square" alt="Last commit"></a>
-</p>
+Original project: [shingrus/1time](https://github.com/shingrus/1time)
 
----
+## What This Fork Changes
 
-<p align="center">
-  <img src="docs/screenshot-create.png" alt="Create a secret" width="45%">
-  &nbsp;&nbsp;
-  <img src="docs/screenshot-reveal.png" alt="Reveal a secret" width="45%">
-</p>
+- The create flow is a single-page React/Vite app at `/`
+- Text and file sharing are a UI toggle on the same page
+- `/secure-file-sharing/` and `/share-password-securely/` are compatibility entrypoints only
+- Link creation does not auto-copy to the clipboard
+- The GitHub workflow publishes fork-owned images to:
+  - `ghcr.io/<owner>/1time-backend`
+  - `ghcr.io/<owner>/1time-web`
+- Deployment is intended to use pinned image digests, not mutable upstream `latest`
 
-## Why 1time?
+## Current Routes
 
-| | Feature | Details |
-|---|---|---|
-| **🔐** | **Zero-knowledge encryption** | Secrets are encrypted in your browser with AES-GCM. The server never sees plaintext. |
-| **🔥** | **Self-destructing links** | Each link works exactly once, then the data is permanently deleted. |
-| **📁** | **Encrypted file sharing** | Send files with one-time download links. File contents and metadata stay inside the encrypted payload. |
-| **🏠** | **Self-hosted** | Run your own instance with Docker Compose in under 2 minutes. |
-| **👤** | **No signup required** | Paste a secret, get a link, share it. No accounts, no tracking. |
-| **🔑** | **Built-in generators** | Password, passphrase, API key, and WiFi password generators included. |
-| **💻** | **First-party CLI** | `npm i -g @1time/cli` — pipe secrets from your terminal, perfect for DevOps workflows. |
-| **⚡** | **Lightweight stack** | Go + Redis backend, static Next.js frontend. Minimal resource usage. |
+- `/`
+  Creates either a text secret or a file share, depending on the selected toggle.
+- `/v/#<randomKey><id>`
+  Opens a text secret.
+- `/f/#<randomKey><id>`
+  Opens a file share.
+- `/secure-file-sharing/`
+  Compatibility route. The SPA normalizes this back to `/` and opens file mode.
+- `/share-password-securely/`
+  Compatibility route. The SPA normalizes this back to `/` and opens text mode.
 
----
+## Security Model
 
-## How It Works
+- Encryption happens in the browser with AES-256-GCM and HKDF-SHA256.
+- The server stores ciphertext and a hash-based proof-of-knowledge, not plaintext.
+- The decryption key stays in the URL fragment (`#`) and is not sent to the server.
+- Text and file secrets are deleted after successful retrieval under the current one-time model.
+- The app does not automatically overwrite the user clipboard when a link is created.
 
-```
-You                          Server                        Recipient
- │                             │                              │
- │  1. Type secret             │                              │
- │  2. Browser encrypts        │                              │
- │     with AES-GCM            │                              │
- │  3. Send encrypted blob ──► │  Stores encrypted blob       │
- │  4. Get link with key       │  (cannot decrypt it)         │
- │     in URL fragment (#)     │                              │
- │                             │                              │
- │  5. Share link ─────────────┼──────────────────────────►   │
- │                             │                              │
- │                             │  ◄── 6. Fetch encrypted blob │
- │                             │  7. Delete blob permanently  │
- │                             │  8. Send blob ──────────►    │
- │                             │                              │
- │                             │     9. Browser decrypts      │
- │                             │        with key from #       │
-```
+## Known Gaps
 
-The encryption key stays in the URL fragment (`#`), which is **never sent to the server**. Even with full database access, secrets cannot be read.
+- Creator audit links are not implemented yet.
+- The current container images still run as `root`; runtime hardening is still worth doing.
+- Privacy docs will need to change if creator-visible IP logging is added.
 
-The same zero-knowledge model also powers encrypted file sharing: the browser encrypts the file and its metadata before upload, and the server stores only encrypted bytes until the recipient downloads them once.
+The audit-trail proposal for this fork is documented in [docs/creator-audit-design.md](docs/creator-audit-design.md).
 
-**Cryptographic details:** Keys are derived using HKDF-SHA256 with a fixed salt. Two separate keys are produced — one for AES-256-GCM encryption and one for authentication (hash-based proof-of-knowledge). The server verifies the auth hash with constant-time comparison before releasing the encrypted blob, then permanently deletes it.
+## Repo Commands
 
----
-
-## Quick Start
-
-### Use the hosted version
-
-**[1time.io](https://1time.io)** — free, no signup, ready to use.
-
-Use the web app to share both text secrets and encrypted files with one-time links.
-
-### CLI
+Run these from the repository root.
 
 ```bash
-npm install -g @1time/cli
+# Frontend dev server
+npm run dev
 
-# Send a secret
-printf 'postgres://user:pass@host/db' | 1time send
-# → https://1time.io/v/#...
+# Frontend production build
+npm run build
 
-# Read a secret
-1time read 'https://1time.io/v/#...'
+# Frontend tests
+npm run test
 
-# Send an encrypted file
-1time send-file ./backup-codes.txt
-
-# Read an encrypted file
-1time read-file 'https://1time.io/f/#...'
+# Backend tests
+npm run test:backend
 ```
 
-Pipe-friendly, no browser needed. Works with self-hosted instances via `--host`. See [CLI docs](cli/README.md) for more.
+The root `npm` commands bootstrap frontend dependencies automatically.
 
-### Self-host with Docker Compose
+## Local Development Stack
 
-**Option 1: Pre-built images (recommended)**
+To build the full app from source with Docker:
 
 ```bash
-curl -O https://raw.githubusercontent.com/shingrus/1time/master/docker-compose.yml
-curl -O https://raw.githubusercontent.com/shingrus/1time/master/.env.example
 cp .env.example .env
-# Edit .env: set APP_HOSTNAME to your domain
-docker compose up -d
-```
-
-**Option 2: Build from source**
-
-```bash
-git clone https://github.com/shingrus/1time.git
-cd 1time
-cp .env.example .env
-# Edit .env: set APP_HOSTNAME to your domain
 docker compose -f docker-compose.dev.yml up -d --build
 ```
 
-Both options start on `http://localhost:8080` with Redis persistence, encrypted file storage under `DATA_DIR/files`, the Go API, and nginx serving the frontend. Multi-arch images (amd64 + arm64) are available.
+That starts:
 
-### Configuration
+- `redis`
+- `backend`
+- `web`
 
-| Variable | Default | Description |
-|---|---|---|
-| `APP_HOSTNAME` | `1time.io` | Public hostname for links and metadata |
-| `APP_PORT` | `8080` | External HTTP port |
-| `DATA_DIR` | `./data` | Host path for Redis persistence and encrypted file storage |
-| `SHOW_BLOG` | `false` | Enable blog routes (for hosted version) |
+Default local URL:
 
-Put your own reverse proxy (Caddy, Traefik, nginx) in front for HTTPS/TLS termination.
-
-> **Note:** The frontend image is generic — changing `APP_HOSTNAME` does not require rebuilding. The hostname is injected at container startup.
-
----
-
-## Comparison with Alternatives
-
-| Feature | **1time** | OneTimeSecret | Yopass | PrivateBin | Password Pusher |
-|---|:---:|:---:|:---:|:---:|:---:|
-| Zero-knowledge (E2E encrypted) | **Yes** | No | Yes | Yes | No |
-| Self-destructing after first read | **Yes** | Yes | Yes | Optional | Optional |
-| No signup required | **Yes** | Yes | Yes | Yes | Yes |
-| Self-hosted Docker Compose | **Yes** | Yes | Yes | Yes | Yes |
-| First-party CLI | **Yes** | No | Yes | No | Yes |
-| Built-in password generators | **Yes** | No | No | No | No |
-| Lightweight (Go + static HTML) | **Yes** | No (Ruby) | Yes (Go) | No (PHP) | No (Ruby) |
-| Open source | **MIT** | MIT | Apache-2.0 | zlib | Apache-2.0 |
-
----
-
-## Free Tools
-
-- [Secure File Sharing](https://1time.io/secure-file-sharing) — send encrypted files with one-time download links
-- [Password Generator](https://1time.io/password-generator) — strong random passwords
-- [Passphrase Generator](https://1time.io/passphrase-generator) — memorable multi-word passphrases
-- [API Key Generator](https://1time.io/api-key-generator) — random tokens for developers
-- [WiFi Password Generator](https://1time.io/wifi-password-generator) — easy-to-type network passwords
-- [Share Passwords with QR Code](https://1time.io/share-passwords-with-qr-code) — hand off secrets across devices and in person
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Backend | Go (stdlib, no frameworks) |
-| Storage | Redis plus encrypted file blobs on disk |
-| Frontend | Next.js (static export) |
-| CLI | Node.js ([`@1time/cli`](https://www.npmjs.com/package/@1time/cli)) |
-| Encryption | Web Crypto API (AES-256-GCM, HKDF-SHA256) |
-| Deployment | Docker Compose + nginx |
-
----
-
-## Development
-
-### Requirements
-
-- Go 1.22+
-- Redis 7+
-- Node.js 20+ and npm
-
-### Backend
-
-```bash
-# Start Redis locally
-mkdir -p /tmp/1time-files
-export FILE_STORAGE_DIR=/tmp/1time-files
-export REDISHOST=127.0.0.1:6379
-export REDISPASS=
-
-# Run the backend
-go run ./backend
-# Listening on http://127.0.0.1:8080
-
-# Tests
-GOCACHE=/tmp/go-cache go test ./backend/...
+```text
+http://127.0.0.1:8080
 ```
 
-### Frontend
+## Image Publishing
+
+The GitHub Actions workflow in [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml) publishes:
+
+- `ghcr.io/<owner>/1time-backend`
+- `ghcr.io/<owner>/1time-web`
+
+Tag behavior:
+
+- Push to `master`: publishes `sha-<12>`, `master`, and `latest`
+- Push tag `v*`: publishes `sha-<12>`, the version tag, and `latest`
+
+The workflow builds multi-arch images for `linux/amd64` and `linux/arm64`.
+
+## Deployment
+
+This repo contains a digest-pinned deployment compose file in [docker-compose.yml](docker-compose.yml).
 
 ```bash
-cd frontend
-npm install
-npm run dev
-# Dev server on http://127.0.0.1:3001, proxies /api to Go backend
-
-# Production build
-npm run build
-
-# Tests
-npm test
+cp .env.example .env
+# set APP_HOSTNAME, BACKEND_IMAGE, WEB_IMAGE
+docker compose up -d
 ```
 
-### CLI
+Relevant variables from [.env.example](.env.example):
 
-```bash
-cd cli
-npm install
-npm test
+- `APP_HOSTNAME`
+- `BACKEND_IMAGE`
+- `WEB_IMAGE`
+- `APP_PORT`
+- `DATA_DIR`
 
-# Run locally against dev backend
-printf 'hello' | node index.mjs send --host http://127.0.0.1:8080
-```
+Pin `BACKEND_IMAGE` and `WEB_IMAGE` to exact digests from your own GHCR packages.
 
-### Full build
+## Build Notes
 
-```bash
-make build
-# Produces: bin/1time-api (backend) + frontend/build/ (static assets)
-```
+- The deployment frontend is static output served by nginx from `frontend/dist`.
+- The web image build happens in [Dockerfile.web](Dockerfile.web).
+- The backend binary build happens in [Dockerfile.backend](Dockerfile.backend).
+- `make build` still produces:
+  - `bin/1time-api`
+  - `frontend/dist`
 
-### VM deployment (Ubuntu/Debian)
+## Audit Trail Proposal
 
-```bash
-make build
-sudo ./scripts/init_vm.sh
-```
+The creator-audit feature request for this fork is not a trivial add-on.
 
-Installs nginx, Redis, creates the `1time` systemd service, and deploys the built artifacts.
+The important design constraints are:
 
----
+- The current links use `/v/#<key><id>` and `/f/#<key><id>`
+- Because the `id` is inside the fragment, the server cannot identify which secret page was merely opened
+- That means you cannot reliably log "who opened the link" from the initial page request with the current URL format
 
-## Contributing
-
-Contributions are welcome! Please open an issue first to discuss what you'd like to change.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
-
----
-
-## Security
-
-The encryption model is designed so that **the server operator cannot read secrets**, even with full database and infrastructure access. If you find a security vulnerability, please email the maintainer directly instead of opening a public issue.
-
----
+The proposed fix is documented in [docs/creator-audit-design.md](docs/creator-audit-design.md).
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2018-2026 1time.io
+[MIT](LICENSE)

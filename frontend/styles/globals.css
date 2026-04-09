@@ -5,7 +5,7 @@
 
 /* Latin subset only — covers English and Western European characters.
    Vietnamese and Latin-ext subsets removed (unused, saves ~70KB of font downloads).
-   Fonts are preloaded in layout.jsx to eliminate the render-blocking chain. */
+   Fonts are preloaded in index.html to eliminate the render-blocking chain. */
 @font-face {
   font-family: 'Bricolage Grotesque Variable';
   font-style: normal;
@@ -134,20 +134,43 @@ body {
 .app-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   text-decoration: none;
   color: var(--text);
 }
 
-.app-logo-text {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 22px;
-  letter-spacing: -0.02em;
+.app-brand-mark {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #EA580C, #C2410C);
+  color: #fff;
+  box-shadow: 0 10px 20px rgba(194, 65, 12, 0.18);
 }
 
-.app-logo-text span {
-  color: var(--accent);
+.app-brand-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.app-brand-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.app-brand-subtitle {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .app-nav {
@@ -197,24 +220,6 @@ body {
   text-align: center;
 }
 
-.app-footer-tools {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px 16px;
-  margin-bottom: 12px;
-  font-size: 13px;
-}
-
-.app-footer-tools a {
-  color: var(--text-secondary);
-  text-decoration: none;
-}
-
-.app-footer-tools a:hover {
-  color: var(--accent);
-}
-
 .app-footer-text {
   font-size: 13px;
   color: var(--text-secondary);
@@ -228,19 +233,6 @@ body {
 
 .app-footer-text a:hover {
   color: var(--accent);
-}
-
-/* Shared content links for prose-heavy sections */
-.article-body a:not(.btn),
-.seo-section p a {
-  color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.article-body a:not(.btn):hover,
-.seo-section p a:hover {
-  color: var(--accent-hover);
 }
 
 /* Typography */

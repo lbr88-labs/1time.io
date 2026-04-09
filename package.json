@@ -1,0 +1,10 @@
+{
+  "name": "1time-repo",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix frontend install --no-fund --no-audit && npm --prefix frontend run dev",
+    "build": "npm --prefix frontend install --no-fund --no-audit && npm --prefix frontend run build",
+    "test": "npm --prefix frontend install --no-fund --no-audit && npm --prefix frontend run test",
+    "test:backend": "GOCACHE=/tmp/go-cache go test ./backend/..."
+  }
+}

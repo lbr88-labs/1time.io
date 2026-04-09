@@ -1,39 +1,13 @@
-'use client';
-
 import '../styles/link.css';
 import {useEffect, useRef, useState} from "react";
-import {useRouter} from "next/navigation";
 import {copyTextToClipboard} from '../utils/util';
 import {createQrSvg} from '../utils/qr';
 
 export default function ShowNewLink({newLink = "", onReset}) {
-    const router = useRouter();
     const [copied, setCopied] = useState(false);
-    const [didAutoCopy, setDidAutoCopy] = useState(false);
     const [isQrLoading, setIsQrLoading] = useState(false);
     const [qrSvg, setQrSvg] = useState("");
     const resetCopiedTimeoutRef = useRef(null);
-
-    useEffect(() => {
-        if (!newLink) {
-            return undefined;
-        }
-
-        let isActive = true;
-
-        const autoCopyLink = async () => {
-            const didCopy = await copyTextToClipboard(newLink);
-            if (didCopy && isActive) {
-                setDidAutoCopy(true);
-            }
-        };
-
-        void autoCopyLink();
-
-        return () => {
-            isActive = false;
-        };
-    }, [newLink]);
 
     useEffect(() => {
         return () => {
@@ -46,7 +20,6 @@ export default function ShowNewLink({newLink = "", onReset}) {
     const handleCopy = async () => {
         const didCopy = await copyTextToClipboard(newLink);
         if (didCopy) {
-            setDidAutoCopy(true);
             setCopied(true);
             if (resetCopiedTimeoutRef.current) {
                 window.clearTimeout(resetCopiedTimeoutRef.current);
@@ -61,7 +34,9 @@ export default function ShowNewLink({newLink = "", onReset}) {
             return;
         }
 
-        router.push('/');
+        if (typeof window !== 'undefined') {
+            window.location.assign('/');
+        }
     };
 
     const handleToggleQr = async () => {
@@ -152,12 +127,12 @@ export default function ShowNewLink({newLink = "", onReset}) {
                     type="button"
                 >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        {(copied || didAutoCopy)
+                        {copied
                             ? <polyline points="20 6 9 17 4 12"/>
                             : <><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>
                         }
                     </svg>
-                    {copied ? "Copied!" : didAutoCopy ? "Link already copied" : "Copy link"}
+                    {copied ? "Copied!" : "Copy link"}
                 </button>
                 <button
                     className="btn btn-secondary btn-lg"

@@ -9,7 +9,7 @@ WORKDIR /src/frontend
 
 ARG SHOW_BLOG=true
 
-ENV NEXT_PUBLIC_SHOW_BLOG=${SHOW_BLOG}
+ENV VITE_SHOW_BLOG=${SHOW_BLOG}
 
 RUN npm install -g npm@${NPM_VERSION}
 
@@ -28,7 +28,9 @@ ENV NGINX_PORT=8080
 
 COPY docker/nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY docker/nginx/40-rewrite-site-host.sh /docker-entrypoint.d/40-rewrite-site-host.sh
-COPY --from=builder /src/frontend/build /usr/share/nginx/html
+COPY configs/nginx/1time-security-headers.conf /etc/nginx/snippets/1time-security-headers.conf
+COPY configs/nginx/1time-security-headers-sensitive.conf /etc/nginx/snippets/1time-security-headers-sensitive.conf
+COPY --from=builder /src/frontend/dist /usr/share/nginx/html
 
 RUN chmod +x /docker-entrypoint.d/40-rewrite-site-host.sh
 

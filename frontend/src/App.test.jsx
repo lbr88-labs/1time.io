@@ -1,64 +1,27 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import {render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {beforeEach, describe, expect, it, vi} from 'vitest';
 
-// Mock next/navigation
-const mockPush = vi.fn();
-const mockPathname = vi.fn(() => '/');
-const mockClipboardWriteText = vi.fn();
-
-vi.mock('next/navigation', () => ({
-    useRouter: () => ({ push: mockPush }),
-    usePathname: () => mockPathname(),
-}));
-
-// Mock next/link as a simple anchor
-vi.mock('next/link', () => ({
-    default: ({ href, children, ...props }) =>
-        React.createElement('a', { href, ...props }, children),
-}));
-
+import App from './App';
 import NewMessage from '../components/NewMessage';
 import ShowNewLink from '../components/ShowNewLink';
 import ViewSecretMessage from '../components/ViewSecretMessage';
-import PasswordGenerator from '../components/PasswordGenerator';
-import StatsSnapshot from '../components/StatsSnapshot';
-import { Constants, decryptSecretMessage, encryptSecretMessage, getRandomString, getStatsPageName, hashSecretKey } from '../utils/util';
+import {Constants, decryptSecretMessage, encryptSecretMessage, getRandomString, hashSecretKey} from '../utils/util';
+
+const mockClipboardWriteText = vi.fn();
 
 beforeEach(() => {
     vi.clearAllMocks();
-    mockPathname.mockReturnValue('/');
     mockClipboardWriteText.mockResolvedValue(undefined);
     window.history.pushState({}, '', '/');
-    global.fetch = vi.fn().mockImplementation(async (url) => {
-        if (url === '/api/stat') {
-            return {
-                ok: true,
-                json: async () => ({}),
-            };
-        }
-
-        if (url === '/api/ss') {
-            return {
-                ok: true,
-                json: async () => ({
-                    overallStoredSecrets: 0,
-                    overallStoredFiles: 0,
-                    pendingPageHits: {},
-                    pendingPageHitsTotal: 0,
-                    flushIntervalSeconds: 10,
-                }),
-            };
-        }
-
-        return {
-            ok: true,
-            json: async () => ({
-                status: 'ok',
-            }),
-        };
-    });
+    window.sessionStorage.clear();
+    global.fetch = vi.fn().mockImplementation(async () => ({
+        ok: true,
+        json: async () => ({
+            status: 'ok',
+        }),
+    }));
     window.scrollTo = vi.fn();
     Object.defineProperty(window.navigator, 'clipboard', {
         configurable: true,
@@ -68,47 +31,68 @@ beforeEach(() => {
     });
 });
 
+describe('App shell', () => {
+    it('rewrites the old file-sharing route to root and keeps file mode selected', async () => {
+        window.history.pushState({}, '', '/secure-file-sharing/');
+
+        render(<App />);
+
+        expect(screen.getByText('Secure Handoff')).toBeInTheDocument();
+        expect(screen.getByText('Encrypted one-time links')).toBeInTheDocument();
+        expect(screen.getByText(/your file, end-to-end encrypted/i)).toBeInTheDocument();
+        expect(document.title).toContain('Secure File Sharing');
+
+        await waitFor(() => {
+            expect(window.location.pathname).toBe('/');
+        });
+    });
+
+    it('switches modes on the same page without changing the URL', async () => {
+        const user = userEvent.setup();
+
+        render(<App />);
+
+        expect(screen.getByLabelText(/your secret message/i)).toBeInTheDocument();
+        expect(window.location.pathname).toBe('/');
+
+        await user.click(screen.getByRole('button', {name: /secure file sharing/i}));
+
+        expect(screen.getByText(/your file, end-to-end encrypted/i)).toBeInTheDocument();
+        expect(window.location.pathname).toBe('/');
+        expect(window.sessionStorage.getItem('shareMode')).toBe('file');
+    });
+});
+
 describe('NewMessage component', () => {
     it('renders the message form with always-visible options', async () => {
         const user = userEvent.setup();
 
         render(<NewMessage />);
 
-        const submitButton = screen.getByRole('button', { name: /create secret link/i });
+        const submitButton = screen.getByRole('button', {name: /create secret link/i});
         expect(submitButton).toBeDisabled();
         expect(screen.getByLabelText(/additional passphrase/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', {name: /generate one/i})).toBeInTheDocument();
         expect(screen.getByLabelText(/expire after/i)).toBeInTheDocument();
 
         await user.type(screen.getByLabelText(/your secret message/i), 'top secret');
         expect(submitButton).toBeEnabled();
     });
 
-    it('submits a new secret and navigates to the generated link page', async () => {
+    it('submits a new secret and shows the generated link', async () => {
         const user = userEvent.setup();
-        fetch.mockImplementation(async (url) => {
-            if (url === '/api/stat') {
-                return {
-                    ok: true,
-                    json: async () => ({
-                        status: 'ok',
-                        overallStoredSecrets: 100,
-                    }),
-                };
-            }
-
-            return {
-                ok: true,
-                json: async () => ({
-                    status: 'ok',
-                    newId: 'abc123',
-                }),
-            };
-        });
+        fetch.mockImplementation(async () => ({
+            ok: true,
+            json: async () => ({
+                status: 'ok',
+                newId: 'abc123',
+            }),
+        }));
 
         render(<NewMessage />);
 
         await user.type(screen.getByLabelText(/your secret message/i), 'ship it');
-        await user.click(screen.getByRole('button', { name: /create secret link/i }));
+        await user.click(screen.getByRole('button', {name: /create secret link/i}));
 
         await waitFor(() => {
             expect(fetch.mock.calls.some(([url]) => url === '/api/saveSecret')).toBe(true);
@@ -136,12 +120,11 @@ describe('NewMessage component', () => {
         const linkInput = await screen.findByLabelText(/secret one-time link/i);
         expect(linkInput.value).toContain('/v/#');
         expect(linkInput.value).toContain('abc123');
-        expect(mockPush).not.toHaveBeenCalled();
     });
 });
 
 describe('ShowNewLink component', () => {
-    it('displays the generated link and auto-copies it', async () => {
+    it('displays the generated link without touching the clipboard automatically', async () => {
         render(<ShowNewLink newLink="http://localhost:3001/v/#AbCdEfGhIjKlMnOpQr-_testId123" onReset={vi.fn()} />);
 
         const linkInput = await screen.findByLabelText(/secret one-time link/i);
@@ -149,10 +132,8 @@ describe('ShowNewLink component', () => {
         expect(linkInput.value).toContain('/v/#');
         expect(linkInput.value).toContain('AbCdEfGhIjKlMnOpQr-_');
         expect(linkInput.value).toContain('testId123');
-
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /link already copied/i })).toBeInTheDocument();
-        });
+        expect(screen.getByRole('button', {name: /copy link/i})).toBeInTheDocument();
+        expect(mockClipboardWriteText).not.toHaveBeenCalled();
     });
 
     it('loads the QR UI only after the user requests it', async () => {
@@ -162,115 +143,15 @@ describe('ShowNewLink component', () => {
             <ShowNewLink
                 newLink="http://localhost:3001/v/#AbCdEfGhIjKlMnOpQr-_testId123"
                 onReset={vi.fn()}
-            />
+            />,
         );
 
         expect(screen.queryByLabelText(/secret link qr code/i)).not.toBeInTheDocument();
 
-        await user.click(screen.getByRole('button', { name: /show qr code/i }));
+        await user.click(screen.getByRole('button', {name: /show qr code/i}));
 
         await screen.findByText(/scan from another device/i);
         expect(await screen.findByLabelText(/secret link qr code/i)).toBeInTheDocument();
-    });
-});
-
-describe('PasswordGenerator component', () => {
-    it('renders with the correct preset for password-generator', () => {
-        const {container} = render(<PasswordGenerator presetPath="/password-generator" />);
-
-        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Password Generator');
-        expect(screen.getByRole('button', { name: /share as link/i })).toBeInTheDocument();
-        expect(container.querySelector('.gen-output-copy')).not.toBeNull();
-    });
-
-    it('creates a one-time link from the password generator and navigates', async () => {
-        const user = userEvent.setup();
-        fetch.mockImplementation(async (url) => {
-            if (url === '/api/stat') {
-                return {
-                    ok: true,
-                    json: async () => ({
-                        status: 'ok',
-                        overallStoredSecrets: 100,
-                    }),
-                };
-            }
-
-            return {
-                ok: true,
-                json: async () => ({
-                    status: 'ok',
-                    newId: 'gen123',
-                }),
-            };
-        });
-
-        render(<PasswordGenerator presetPath="/password-generator" />);
-
-        await user.click(await screen.findByRole('button', { name: /share as link/i }));
-
-        await waitFor(() => {
-            expect(fetch.mock.calls.some(([url]) => url === '/api/saveSecret')).toBe(true);
-        });
-
-        const saveSecretCall = fetch.mock.calls.find(([url]) => url === '/api/saveSecret');
-        expect(saveSecretCall).toEqual([
-            '/api/saveSecret',
-            expect.objectContaining({
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: expect.any(String),
-            }),
-        ]);
-
-        const requestPayload = JSON.parse(saveSecretCall[1].body);
-        expect(requestPayload).toEqual(expect.objectContaining({
-            secretMessage: expect.any(String),
-            hashedKey: expect.any(String),
-            duration: Constants.defaultDuration * 86400,
-        }));
-
-        const linkInput = await screen.findByLabelText(/secret one-time link/i);
-        expect(linkInput.value).toContain('/v/#');
-        expect(linkInput.value).toContain('gen123');
-        expect(mockPush).not.toHaveBeenCalled();
-    });
-});
-
-describe('StatsSnapshot component', () => {
-    it('renders the in-memory stats snapshot', async () => {
-        fetch.mockImplementation(async (url) => {
-            if (url === '/api/ss') {
-                return {
-                    ok: true,
-                    json: async () => ({
-                        overallStoredSecrets: 12,
-                        overallStoredFiles: 5,
-                        pendingPageHits: {
-                            home: 2,
-                            blog: 1,
-                        },
-                        pendingPageHitsTotal: 3,
-                        flushIntervalSeconds: 10,
-                    }),
-                };
-            }
-
-            return {
-                ok: true,
-                json: async () => ({}),
-            };
-        });
-
-        render(<StatsSnapshot />);
-
-        expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('In-Memory Stats');
-        expect(await screen.findByText('12')).toBeInTheDocument();
-        expect(screen.getByText('5')).toBeInTheDocument();
-        expect(screen.getByText('home')).toBeInTheDocument();
-        expect(screen.getByText('blog')).toBeInTheDocument();
     });
 });
 
@@ -279,7 +160,7 @@ describe('ViewSecretMessage component', () => {
         render(<ViewSecretMessage />);
 
         expect(screen.getByText(/encrypted message/i)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /decrypt & read/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', {name: /decrypt & read/i})).toBeInTheDocument();
     });
 
     it('loads the QR UI on the view page only after the user requests it', async () => {
@@ -290,7 +171,7 @@ describe('ViewSecretMessage component', () => {
 
         expect(screen.queryByLabelText(/secret link qr code/i)).not.toBeInTheDocument();
 
-        await user.click(await screen.findByRole('button', { name: /show qr code/i }));
+        await user.click(await screen.findByRole('button', {name: /show qr code/i}));
 
         await screen.findByText(/scan from another device/i);
         expect(await screen.findByLabelText(/secret link qr code/i)).toBeInTheDocument();
@@ -301,7 +182,7 @@ describe('ViewSecretMessage component', () => {
 
         render(<ViewSecretMessage />);
 
-        await user.click(await screen.findByRole('button', { name: /decrypt & read/i }));
+        await user.click(await screen.findByRole('button', {name: /decrypt & read/i}));
 
         expect(await screen.findByText(/already been read or has expired/i)).toBeInTheDocument();
         expect(fetch).not.toHaveBeenCalled();
@@ -309,15 +190,6 @@ describe('ViewSecretMessage component', () => {
 });
 
 describe('crypto util', () => {
-    it('groups tracked routes into shared stats buckets', () => {
-        expect(getStatsPageName('/')).toBe('home');
-        expect(getStatsPageName('/blog/how-to-share-passwords-securely')).toBe('blog');
-        expect(getStatsPageName('/password-generator-16-characters')).toBe('password');
-        expect(getStatsPageName('/passphrase-generator')).toBe('password');
-        expect(getStatsPageName('/api-key-generator')).toBe('password');
-        expect(getStatsPageName('/about')).toBeNull();
-    });
-
     it('round-trips HKDF-derived encryption and auth for a secret', async () => {
         const fullSecretKey = 'extra-passphraseAbCd1234';
         const {encryptedMessage, hashedKey} = await encryptSecretMessage('hello hkdf', fullSecretKey);

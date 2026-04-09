@@ -1,10 +1,8 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {fireEvent, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {beforeEach, describe, expect, it, vi} from 'vitest';
 
-const mockPush = vi.fn();
-const mockPathname = vi.fn(() => '/');
 const mockClipboardWriteText = vi.fn();
 
 const fileProtocolMocks = vi.hoisted(() => ({
@@ -20,11 +18,6 @@ const fileApiMocks = vi.hoisted(() => ({
 
 const protocolMocks = vi.hoisted(() => ({
     hashSecretKey: vi.fn(),
-}));
-
-vi.mock('next/navigation', () => ({
-    useRouter: () => ({ push: mockPush }),
-    usePathname: () => mockPathname(),
 }));
 
 vi.mock('../utils/fileProtocol', () => ({
@@ -48,11 +41,10 @@ vi.mock('../utils/protocol.mjs', async () => {
 
 import SecureFileShare from '../components/SecureFileShare';
 import ViewSecretFile from '../components/ViewSecretFile';
-import { Constants } from '../utils/util';
+import {Constants} from '../utils/util';
 
 beforeEach(() => {
     vi.clearAllMocks();
-    mockPathname.mockReturnValue('/');
     mockClipboardWriteText.mockResolvedValue(undefined);
     protocolMocks.hashSecretKey.mockResolvedValue('hashed-file-key');
     window.history.pushState({}, '', '/');
@@ -105,7 +97,6 @@ describe('SecureFileShare component', () => {
         expect(linkInput.value).toContain('/f/#');
         expect(linkInput.value).toContain(randomKey);
         expect(linkInput.value).toContain('file123');
-        expect(mockPush).not.toHaveBeenCalled();
     });
 
     it('rejects oversized files before encryption or upload', () => {
@@ -172,6 +163,5 @@ describe('ViewSecretFile component', () => {
 
         expect(await screen.findByText(/file downloaded and permanently destroyed/i)).toBeInTheDocument();
         expect(fileApiMocks.getFile).toHaveBeenCalledWith('file123', 'hashed-file-key');
-        expect(mockPush).not.toHaveBeenCalled();
     });
 });

@@ -2,14 +2,16 @@ name: Build and Push Docker Images
 
 on:
   push:
+    branches:
+      - master
     tags:
       - 'v*'
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  BACKEND_IMAGE: ghcr.io/${{ github.repository }}-backend
-  WEB_IMAGE: ghcr.io/${{ github.repository }}-web
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/1time-backend
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/1time-web
 
 jobs:
   build-and-push:
@@ -29,22 +31,32 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Extract version from tag
+      - name: Compute image tags
         id: meta
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            VERSION="${{ github.ref_name }}"
-            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-            echo "tags_backend=${{ env.BACKEND_IMAGE }}:${VERSION},${{ env.BACKEND_IMAGE }}:latest" >> "$GITHUB_OUTPUT"
-            echo "tags_web=${{ env.WEB_IMAGE }}:${VERSION},${{ env.WEB_IMAGE }}:latest" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=latest" >> "$GITHUB_OUTPUT"
-            echo "tags_backend=${{ env.BACKEND_IMAGE }}:latest" >> "$GITHUB_OUTPUT"
-            echo "tags_web=${{ env.WEB_IMAGE }}:latest" >> "$GITHUB_OUTPUT"
+          short_sha="${GITHUB_SHA::12}"
+          backend_tags="${BACKEND_IMAGE}:sha-${short_sha}"
+          web_tags="${WEB_IMAGE}:sha-${short_sha}"
+
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME}"
+            backend_tags="${backend_tags},${BACKEND_IMAGE}:${version},${BACKEND_IMAGE}:latest"
+            web_tags="${web_tags},${WEB_IMAGE}:${version},${WEB_IMAGE}:latest"
+          elif [[ "${GITHUB_REF}" == "refs/heads/${DEFAULT_BRANCH}" ]]; then
+            backend_tags="${backend_tags},${BACKEND_IMAGE}:${DEFAULT_BRANCH},${BACKEND_IMAGE}:latest"
+            web_tags="${web_tags},${WEB_IMAGE}:${DEFAULT_BRANCH},${WEB_IMAGE}:latest"
           fi
+
+          echo "tags_backend=${backend_tags}" >> "$GITHUB_OUTPUT"
+          echo "tags_web=${web_tags}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push backend
         uses: docker/build-push-action@v6
@@ -54,6 +66,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags_backend }}
           platforms: linux/amd64,linux/arm64
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
@@ -68,5 +83,8 @@ jobs:
           build-args: |
             APP_HOSTNAME=1time.io
             SHOW_BLOG=false
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web

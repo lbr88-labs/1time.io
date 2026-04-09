@@ -1,9 +1,8 @@
-'use client';
-
 import {lazy, Suspense, useRef, useState} from "react";
 import {Constants, SHARE_DURATION_OPTIONS} from '../utils/util';
 import {encryptFile} from '../utils/fileProtocol';
 import {saveFile} from '../utils/fileApi';
+import {generateShortPassphrase} from '../utils/passphrase';
 
 const ShowNewLink = lazy(() => import('./ShowNewLink'));
 
@@ -24,6 +23,7 @@ export default function SecureFileShare() {
     const [dragActive, setDragActive] = useState(false);
     const [isEncrypting, setIsEncrypting] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [isGeneratingPassphrase, setIsGeneratingPassphrase] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const fileInputRef = useRef(null);
 
@@ -81,6 +81,18 @@ export default function SecureFileShare() {
         setIsEncrypting(false);
         setIsUploading(false);
         setUploadProgress(0);
+    };
+
+    const handleGeneratePassphrase = async () => {
+        setIsGeneratingPassphrase(true);
+
+        try {
+            setSecretKey(await generateShortPassphrase());
+            setFileError("");
+        } catch (error) {
+        } finally {
+            setIsGeneratingPassphrase(false);
+        }
     };
 
     const handleSubmit = async (event) => {
@@ -237,7 +249,17 @@ export default function SecureFileShare() {
 
             <div className="options-grid">
                 <div className="form-field" style={{marginBottom: 0}}>
-                    <label className="form-label" htmlFor="secretKey">Additional passphrase</label>
+                    <div className="form-label-row">
+                        <label className="form-label" htmlFor="secretKey">Additional passphrase</label>
+                        <button
+                            className="passphrase-generate-btn"
+                            type="button"
+                            onClick={handleGeneratePassphrase}
+                            disabled={isGeneratingPassphrase || isLoading}
+                        >
+                            {isGeneratingPassphrase ? 'Generating...' : 'Generate one'}
+                        </button>
+                    </div>
                     <input
                         className="form-input"
                         id="secretKey"

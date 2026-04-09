@@ -6,11 +6,12 @@ import {
     getRandomString,
     hashSecretKey,
 } from './protocol.mjs';
+import {getEnvValue, isDevelopmentEnv} from './env';
 
 export var Constants = {
     ...ProtocolConstants,
-    isDebug: process.env.NODE_ENV === 'development',
-    apiBaseUrl: process.env.NEXT_PUBLIC_API_URL || "/api/",
+    isDebug: isDevelopmentEnv(),
+    apiBaseUrl: getEnvValue('VITE_API_URL', '/api/'),
     maxFileSizeBytes: 10 * 1024 * 1024,
 };
 
@@ -69,51 +70,6 @@ export async function postJson(path, payload) {
     }
 
     return response.json();
-}
-
-export function getStatsPageName(path) {
-    if (!path || path === '/') {
-        return 'home';
-    }
-
-    const normalizedPath = path.replace(/^\/+/, '').replace(/\/+$/, '');
-
-    if (!normalizedPath || normalizedPath === 'about' || normalizedPath === 'v') {
-        return null;
-    }
-
-    if (normalizedPath === 'blog' || normalizedPath.startsWith('blog/')) {
-        return 'blog';
-    }
-
-    if (
-        normalizedPath === 'passphrase-generator' ||
-        normalizedPath.includes('password') ||
-        normalizedPath === 'create-password-14-symbols'
-    ) {
-        return 'password';
-    }
-
-    if (normalizedPath === 'api-key-generator') {
-        return 'password';
-    }
-
-    return null;
-}
-
-export function sendStatsPing(page) {
-    if (!page || typeof window === 'undefined') {
-        return;
-    }
-
-    void fetch(`${Constants.apiBaseUrl}stat`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({page}),
-        keepalive: true,
-    }).catch(() => {});
 }
 
 export async function copyTextToClipboard(text) {
