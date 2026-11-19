@@ -4,6 +4,7 @@ import NewMessage from '../components/NewMessage';
 import SecureFileShare from '../components/SecureFileShare';
 import ViewSecretMessage from '../components/ViewSecretMessage';
 import ViewSecretFile from '../components/ViewSecretFile';
+import ViewAuditLog from '../components/ViewAuditLog';
 import {siteHost} from '../utils/siteConfig';
 
 function normalizePath(pathname) {
@@ -93,7 +94,9 @@ function AboutPage() {
         <h2>Security model</h2>
         <ul>
           <li>End-to-end encryption in the browser</li>
-          <li>One-time access with automatic deletion</li>
+          <li>Secrets stay encrypted on the server; the decryption key remains in the URL fragment</li>
+          <li>Optional sender notifications can record access time, country/network details, and browser after the recipient confirms the warning</li>
+          <li>Configurable multi-open links help avoid scanner and preview-bot burns</li>
           <li>Optional extra passphrase for the recipient</li>
           <li>No account required</li>
         </ul>
@@ -106,14 +109,15 @@ function PrivacyPage() {
   return (
     <div className="about-page">
       <h1>Privacy Policy</h1>
-      <p className="subtitle">Zero-knowledge architecture. No cookies. Minimal service logging.</p>
+      <p className="subtitle">Client-side encryption for secret contents, with optional sender-visible access logging.</p>
 
       <div className="about-section">
         <h2>What we store</h2>
         <ul>
-          <li>Encrypted secrets or encrypted file blobs until they are read or expire</li>
+          <li>Encrypted secrets or encrypted file blobs until they are exhausted or expire</li>
+          <li>Hashed unlock keys and optional hashed audit-link keys</li>
+          <li>For audit-enabled links: recipient access events including time, derived country/network details, browser, and outcome</li>
           <li>Standard web server logs for operational security and abuse control</li>
-          <li>No plaintext secrets and no decryption keys</li>
         </ul>
       </div>
 
@@ -123,6 +127,7 @@ function PrivacyPage() {
           <li>No accounts</li>
           <li>No cookies</li>
           <li>No third-party analytics or advertising trackers</li>
+          <li>No plaintext secrets and no decryption keys</li>
         </ul>
       </div>
     </div>
@@ -153,6 +158,8 @@ function getPageTitle(pathname, shareMode) {
       return `Read Secret | ${siteHost}`;
     case '/f':
       return `Download File | ${siteHost}`;
+    case '/a':
+      return `Audit Log | ${siteHost}`;
     case '/about':
       return `About ${siteHost}`;
     case '/privacy':
@@ -172,6 +179,8 @@ function renderPage(pathname, shareMode, onChangeMode) {
       return <ViewSecretMessage />;
     case '/f':
       return <ViewSecretFile />;
+    case '/a':
+      return <ViewAuditLog />;
     case '/about':
       return <AboutPage />;
     case '/privacy':

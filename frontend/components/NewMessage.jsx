@@ -1,5 +1,5 @@
 import {lazy, Suspense, useState} from "react";
-import {Constants, createSecretLink, SHARE_DURATION_OPTIONS} from '../utils/util';
+import {Constants, createSecretLink, MAX_VIEW_OPTIONS, SHARE_DURATION_OPTIONS} from '../utils/util';
 import {generateShortPassphrase} from '../utils/passphrase';
 
 const ShowNewLink = lazy(() => import('./ShowNewLink'));
@@ -16,9 +16,11 @@ export default function NewMessage() {
     const [secretMessage, setSecretMessage] = useState("");
     const [secretKey, setSecretKey] = useState("");
     const [duration, setDuration] = useState(Constants.defaultDuration);
+    const [maxViews, setMaxViews] = useState(1);
+    const [auditEnabled, setAuditEnabled] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isGeneratingPassphrase, setIsGeneratingPassphrase] = useState(false);
-    const [newLink, setNewLink] = useState("");
+    const [shareResult, setShareResult] = useState(null);
 
     const handleGeneratePassphrase = async () => {
         setIsGeneratingPassphrase(true);
@@ -36,17 +38,21 @@ export default function NewMessage() {
         setIsLoading(true);
 
         try {
-            const {link} = await createSecretLink(secretMessage, {
+            const result = await createSecretLink(secretMessage, {
                 secretKey,
                 durationDays: duration,
+                maxViews,
+                auditEnabled,
             });
 
-            if (link) {
+            if (result.link) {
                 setSecretMessage("");
                 setSecretKey("");
                 setDuration(Constants.defaultDuration);
+                setMaxViews(1);
+                setAuditEnabled(false);
                 setIsLoading(false);
-                setNewLink(link);
+                setShareResult(result);
                 return;
             }
         } catch (error) {}
@@ -54,12 +60,14 @@ export default function NewMessage() {
         setIsLoading(false);
     };
 
-    if (newLink) {
+    if (shareResult?.link) {
         return (
             <Suspense fallback={<LinkReadyFallback />}>
                 <ShowNewLink
-                    newLink={newLink}
-                    onReset={() => setNewLink("")}
+                    newLink={shareResult.link}
+                    auditLink={shareResult.auditLink}
+                    auditEnabled={shareResult.auditEnabled}
+                    onReset={() => setShareResult(null)}
                 />
             </Suspense>
         );
@@ -126,6 +134,32 @@ export default function NewMessage() {
                         ))}
                     </select>
                     <p className="form-help">Link expires even if unread</p>
+                </div>
+                <div className="form-field" style={{marginBottom: 0}}>
+                    <label className="form-label" htmlFor="maxViews">Allowed opens</label>
+                    <select
+                        className="form-select"
+                        id="maxViews"
+                        value={maxViews}
+                        onChange={(event) => setMaxViews(Number(event.target.value))}
+                    >
+                        {MAX_VIEW_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                    </select>
+                    <p className="form-help">Use more than one if mail scanners might trigger the link</p>
+                </div>
+                <div className="form-field form-checkbox-field form-checkbox-field-wide" style={{marginBottom: 0}}>
+                    <label className="form-checkbox-row" htmlFor="auditEnabled">
+                        <input
+                            id="auditEnabled"
+                            type="checkbox"
+                            checked={auditEnabled}
+                            onChange={(event) => setAuditEnabled(event.target.checked)}
+                        />
+                        <span>Notify me when someone opens it</span>
+                    </label>
+                    <p className="form-help">Adds a separate audit link and warns the recipient before reveal</p>
                 </div>
             </div>
         </form>

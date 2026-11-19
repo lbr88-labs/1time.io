@@ -1,5 +1,5 @@
 import {lazy, Suspense, useRef, useState} from "react";
-import {Constants, SHARE_DURATION_OPTIONS} from '../utils/util';
+import {buildAuditLink, buildFileLink, Constants, MAX_VIEW_OPTIONS, SHARE_DURATION_OPTIONS, hashSecretKey, getRandomString} from '../utils/util';
 import {encryptFile} from '../utils/fileProtocol';
 import {saveFile} from '../utils/fileApi';
 import {generateShortPassphrase} from '../utils/passphrase';
@@ -17,7 +17,9 @@ function LinkReadyFallback() {
 export default function SecureFileShare() {
     const [secretKey, setSecretKey] = useState("");
     const [duration, setDuration] = useState(Constants.defaultDuration);
-    const [newLink, setNewLink] = useState("");
+    const [maxViews, setMaxViews] = useState(1);
+    const [auditEnabled, setAuditEnabled] = useState(false);
+    const [shareResult, setShareResult] = useState(null);
     const [selectedFile, setSelectedFile] = useState(null);
     const [fileError, setFileError] = useState("");
     const [dragActive, setDragActive] = useState(false);
@@ -109,6 +111,8 @@ export default function SecureFileShare() {
 
         try {
             const {encryptedBlob, hashedKey, randomKey} = await encryptFile(selectedFile, secretKey);
+            const auditRandomKey = auditEnabled ? getRandomString(Constants.randomKeyLen) : '';
+            const auditHashedKey = auditEnabled ? await hashSecretKey(auditRandomKey) : '';
 
             setIsEncrypting(false);
             setIsUploading(true);
@@ -116,6 +120,11 @@ export default function SecureFileShare() {
                 encryptedBlob,
                 hashedKey,
                 duration,
+                {
+                    auditEnabled,
+                    auditHashedKey,
+                    maxViews,
+                },
                 (progress) => setUploadProgress(Math.min(100, Math.max(0, Math.round(progress * 100)))),
             );
 
@@ -124,7 +133,13 @@ export default function SecureFileShare() {
                 resetProgress();
                 setSecretKey("");
                 setDuration(Constants.defaultDuration);
-                setNewLink(`${window.location.origin}/f/#${randomKey}${data.newId}`);
+                setMaxViews(1);
+                setAuditEnabled(false);
+                setShareResult({
+                    link: buildFileLink(randomKey, data.newId),
+                    auditLink: auditEnabled ? buildAuditLink('file', auditRandomKey, data.newId) : '',
+                    auditEnabled,
+                });
                 return;
             }
 
@@ -136,12 +151,14 @@ export default function SecureFileShare() {
         resetProgress();
     };
 
-    if (newLink) {
+    if (shareResult?.link) {
         return (
             <Suspense fallback={<LinkReadyFallback />}>
                 <ShowNewLink
-                    newLink={newLink}
-                    onReset={() => setNewLink("")}
+                    newLink={shareResult.link}
+                    auditLink={shareResult.auditLink}
+                    auditEnabled={shareResult.auditEnabled}
+                    onReset={() => setShareResult(null)}
                 />
             </Suspense>
         );
@@ -283,6 +300,32 @@ export default function SecureFileShare() {
                         ))}
                     </select>
                     <p className="form-help">Link expires even if unread</p>
+                </div>
+                <div className="form-field" style={{marginBottom: 0}}>
+                    <label className="form-label" htmlFor="maxViews">Allowed opens</label>
+                    <select
+                        className="form-select"
+                        id="maxViews"
+                        value={maxViews}
+                        onChange={(event) => setMaxViews(Number(event.target.value))}
+                    >
+                        {MAX_VIEW_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                    </select>
+                    <p className="form-help">Use more than one if mail scanners or previews are a concern</p>
+                </div>
+                <div className="form-field form-checkbox-field form-checkbox-field-wide" style={{marginBottom: 0}}>
+                    <label className="form-checkbox-row" htmlFor="auditEnabled">
+                        <input
+                            id="auditEnabled"
+                            type="checkbox"
+                            checked={auditEnabled}
+                            onChange={(event) => setAuditEnabled(event.target.checked)}
+                        />
+                        <span>Notify me when someone downloads it</span>
+                    </label>
+                    <p className="form-help">Adds a separate audit link and warns the recipient before download</p>
                 </div>
             </div>
         </form>

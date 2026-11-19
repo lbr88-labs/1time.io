@@ -6,3 +6,8 @@
 /.idea/
 /.claude/
 /data
+.env
+.env.*
+!.env.example
+/frontend/dist/
+*.rdb

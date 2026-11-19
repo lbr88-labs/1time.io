@@ -1,7 +1,7 @@
 import {useState, useEffect} from 'react';
 import {Constants} from '../utils/util';
 import {hashSecretKey} from '../utils/protocol.mjs';
-import {getFile} from '../utils/fileApi';
+import {getFile, getFileInfo} from '../utils/fileApi';
 import {decryptFile, downloadFile} from '../utils/fileProtocol';
 
 function goToShareMode(mode) {
@@ -21,6 +21,8 @@ export default function ViewSecretFile() {
     const [isWrongKey, setIsWrongKey] = useState(false);
     const [isNoMessage, setIsNoMessage] = useState(false);
     const [linkKey, setLinkKey] = useState('');
+    const [shareInfo, setShareInfo] = useState({auditEnabled: false});
+    const [auditAcknowledged, setAuditAcknowledged] = useState(false);
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -35,6 +37,35 @@ export default function ViewSecretFile() {
             }
         }
     }, []);
+
+    useEffect(() => {
+        if (!linkKey || linkKey.length <= Constants.randomKeyLen) {
+            return;
+        }
+
+        let mounted = true;
+        const id = linkKey.substring(Constants.randomKeyLen);
+
+        const loadShareInfo = async () => {
+            try {
+                const data = await getFileInfo(id);
+                if (!mounted || data.status !== 'ok') {
+                    return;
+                }
+
+                setShareInfo({
+                    auditEnabled: Boolean(data.auditEnabled),
+                });
+            } catch (error) {
+            }
+        };
+
+        void loadShareInfo();
+
+        return () => {
+            mounted = false;
+        };
+    }, [linkKey]);
 
     const handleChange = (event) => {
         setSecretKey(event.target.value);
@@ -115,34 +146,57 @@ export default function ViewSecretFile() {
 
                 {/* Pre-download state */}
                 {isPreRead && (
-                    <div className="message-panel">
-                        <div className="message-panel-header">
-                            Encrypted file
+                    <>
+                        {shareInfo.auditEnabled && (
+                            <div className="audit-notice">
+                                <p className="audit-notice-title">Sender notification enabled</p>
+                                <p className="audit-notice-text">
+                                    If you download this file, the sender can see the access time, your network details, and your browser.
+                                </p>
+                                <label className="form-checkbox-row audit-notice-check" htmlFor="auditFileAck">
+                                    <input
+                                        id="auditFileAck"
+                                        type="checkbox"
+                                        checked={auditAcknowledged}
+                                        onChange={(event) => setAuditAcknowledged(event.target.checked)}
+                                    />
+                                    <span>I understand the sender will be notified.</span>
+                                </label>
+                            </div>
+                        )}
+                        <div className="message-panel">
+                            <div className="message-panel-header">
+                                Encrypted file
+                            </div>
+                            <div className="message-panel-body view-download-panel">
+                                <p className="view-download-note">
+                                    Downloading will decrypt the file in your browser and remove it when the allowed reads are exhausted.
+                                </p>
+                                <button
+                                    className="btn btn-success btn-lg"
+                                    type="submit"
+                                    disabled={isLoading || (shareInfo.auditEnabled && !auditAcknowledged)}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="7 10 12 15 17 10"/>
+                                        <line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                    {!isLoading
+                                        ? shareInfo.auditEnabled
+                                            ? 'Download file and notify sender'
+                                            : 'Download the file'
+                                        : 'Decrypting...'}
+                                </button>
+                            </div>
                         </div>
-                        <div className="message-panel-body view-download-panel">
-                            <p className="view-download-note">
-                                Downloading will decrypt the file in your browser and permanently remove it from our servers.
-                            </p>
-                            <button
-                                className="btn btn-success btn-lg"
-                                type="submit"
-                                disabled={isLoading}
-                            >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                    <polyline points="7 10 12 15 17 10"/>
-                                    <line x1="12" y1="15" x2="12" y2="3"/>
-                                </svg>
-                                {!isLoading ? 'Download the file' : 'Decrypting...'}
-                            </button>
-                        </div>
-                    </div>
+                    </>
                 )}
 
                 {/* Downloaded state */}
                 {isDownloaded && (
                     <div className="view-cta">
-                        <p className="view-cta-destroyed">File downloaded and permanently destroyed from our servers.</p>
+                        <p className="view-cta-destroyed">File downloaded successfully.</p>
                         <div className="view-cta-box">
                             <p className="view-cta-heading">Need to share a file securely?</p>
                             <p className="view-cta-desc">Create an encrypted, self-destructing link in seconds. Free, no signup required.</p>

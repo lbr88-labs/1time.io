@@ -20,6 +20,8 @@ export default function ViewSecretMessage() {
     const [isNoMessage, setIsNoMessage] = useState(false);
     const [copied, setCopied] = useState(false);
     const [linkKey, setLinkKey] = useState("");
+    const [shareInfo, setShareInfo] = useState({auditEnabled: false});
+    const [auditAcknowledged, setAuditAcknowledged] = useState(false);
     const [isQrLoading, setIsQrLoading] = useState(false);
     const [qrSvg, setQrSvg] = useState("");
     const hasSecretMessage = secretMessage.length > 0;
@@ -39,6 +41,35 @@ export default function ViewSecretMessage() {
             }
         }
     }, []);
+
+    useEffect(() => {
+        if (!linkKey || linkKey.length <= Constants.randomKeyLen) {
+            return;
+        }
+
+        let mounted = true;
+        const id = linkKey.substring(Constants.randomKeyLen);
+
+        const loadShareInfo = async () => {
+            try {
+                const data = await postJson('info', {id});
+                if (!mounted || data.status !== 'ok') {
+                    return;
+                }
+
+                setShareInfo({
+                    auditEnabled: Boolean(data.auditEnabled),
+                });
+            } catch (error) {
+            }
+        };
+
+        void loadShareInfo();
+
+        return () => {
+            mounted = false;
+        };
+    }, [linkKey]);
 
     const handleChange = (event) => {
         setSecretKey(event.target.value);
@@ -178,6 +209,23 @@ export default function ViewSecretMessage() {
                 {/* Read button */}
                 {isPreRead && (
                     <>
+                    {shareInfo.auditEnabled && (
+                        <div className="audit-notice">
+                            <p className="audit-notice-title">Sender notification enabled</p>
+                            <p className="audit-notice-text">
+                                If you open this secret, the sender can see the access time, your network details, and your browser.
+                            </p>
+                            <label className="form-checkbox-row audit-notice-check" htmlFor="auditAck">
+                                <input
+                                    id="auditAck"
+                                    type="checkbox"
+                                    checked={auditAcknowledged}
+                                    onChange={(event) => setAuditAcknowledged(event.target.checked)}
+                                />
+                                <span>I understand the sender will be notified.</span>
+                            </label>
+                        </div>
+                    )}
                     <div className="message-panel message-panel-locked">
                         <div className="message-panel-header">
                             Encrypted message
@@ -193,9 +241,13 @@ export default function ViewSecretMessage() {
                                 <button
                                     className="btn btn-success btn-lg"
                                     type="submit"
-                                    disabled={isLoading}
+                                    disabled={isLoading || (shareInfo.auditEnabled && !auditAcknowledged)}
                                 >
-                                    {!isLoading ? "Decrypt & read" : "Decrypting..."}
+                                    {!isLoading
+                                        ? shareInfo.auditEnabled
+                                            ? "Open secret and notify sender"
+                                            : "Decrypt & read"
+                                        : "Decrypting..."}
                                 </button>
                             </div>
                         </div>
@@ -256,7 +308,7 @@ export default function ViewSecretMessage() {
                 {/* Post-read CTA */}
                 {hasSecretMessage && (
                     <div className="view-cta">
-                        <p className="view-cta-destroyed">This message has been permanently destroyed from our servers.</p>
+                        <p className="view-cta-destroyed">This message has been opened.</p>
                         <div className="view-cta-box">
                             <p className="view-cta-heading">Need to share a secret yourself?</p>
                             <p className="view-cta-desc">Create an encrypted, self-destructing link in seconds. Free, no signup required.</p>
@@ -275,7 +327,7 @@ export default function ViewSecretMessage() {
                 <a href="https://1time.io" target="_blank" rel="noopener noreferrer">
                     Powered by <strong>1time.io</strong>
                 </a>
-                <span className="view-powered-by-tagline">Free, open-source, zero-knowledge encryption. Your secrets are encrypted in the browser — the server never sees them.</span>
+                <span className="view-powered-by-tagline">Secret contents are encrypted in the browser. Audit-enabled links can record country/network details and browser metadata for the sender.</span>
             </div>
         </div>
     );

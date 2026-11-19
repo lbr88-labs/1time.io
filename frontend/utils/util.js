@@ -22,14 +22,35 @@ export const SHARE_DURATION_OPTIONS = [
     {value: 30, label: '30 days'},
 ];
 
+export const MAX_VIEW_OPTIONS = [
+    {value: 1, label: '1 open'},
+    {value: 2, label: '2 opens'},
+    {value: 3, label: '3 opens'},
+    {value: 5, label: '5 opens'},
+];
+
 export {decryptSecretMessage, encryptSecretMessage, getRandomString, hashSecretKey};
 
 export function buildSecretLink(randomString, newId) {
     return buildProtocolSecretLink(window.location.origin, randomString, newId);
 }
 
+export function buildFileLink(randomString, newId) {
+    return `${window.location.origin}/f/#${randomString}${newId}`;
+}
+
+export function buildAuditLink(kind, auditRandomKey, newId) {
+    const kindPrefix = kind === 'file' ? 'f' : 't';
+    return `${window.location.origin}/a/#${kindPrefix}${auditRandomKey}${newId}`;
+}
+
 export async function createSecretLink(secretMessage, options = {}) {
-    const {secretKey = '', durationDays = Constants.defaultDuration} = options;
+    const {
+        secretKey = '',
+        durationDays = Constants.defaultDuration,
+        maxViews = 1,
+        auditEnabled = false,
+    } = options;
 
     if (!secretMessage) {
         throw new Error('Secret message is required');
@@ -38,11 +59,16 @@ export async function createSecretLink(secretMessage, options = {}) {
     const randomKey = getRandomString(Constants.randomKeyLen);
     const fullSecretKey = secretKey + randomKey;
     const {encryptedMessage, hashedKey} = await encryptSecretMessage(secretMessage, fullSecretKey);
+    const auditRandomKey = auditEnabled ? getRandomString(Constants.randomKeyLen) : '';
+    const auditHashedKey = auditEnabled ? await hashSecretKey(auditRandomKey) : '';
 
     const data = await postJson('saveSecret', {
         secretMessage: encryptedMessage,
         hashedKey,
         duration: durationDays * 86400,
+        auditEnabled,
+        auditHashedKey,
+        maxViews,
     });
 
     if (data.status !== 'ok' || !data.newId) {
@@ -53,6 +79,8 @@ export async function createSecretLink(secretMessage, options = {}) {
         randomKey,
         newId: data.newId,
         link: buildSecretLink(randomKey, data.newId),
+        auditLink: auditEnabled ? buildAuditLink('text', auditRandomKey, data.newId) : '',
+        auditEnabled,
     };
 }
 

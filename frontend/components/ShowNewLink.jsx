@@ -2,12 +2,26 @@ import '../styles/link.css';
 import {useEffect, useRef, useState} from "react";
 import {copyTextToClipboard} from '../utils/util';
 import {createQrSvg} from '../utils/qr';
+import AuditLogPanel from './AuditLogPanel';
 
-export default function ShowNewLink({newLink = "", onReset}) {
-    const [copied, setCopied] = useState(false);
+function extractAuditLinkKey(auditLink) {
+    if (!auditLink) {
+        return '';
+    }
+
+    try {
+        return new URL(auditLink).hash.replace(/^#/, '');
+    } catch (error) {
+        return '';
+    }
+}
+
+export default function ShowNewLink({newLink = "", auditLink = "", auditEnabled = false, onReset}) {
+    const [copiedTarget, setCopiedTarget] = useState("");
     const [isQrLoading, setIsQrLoading] = useState(false);
     const [qrSvg, setQrSvg] = useState("");
     const resetCopiedTimeoutRef = useRef(null);
+    const auditLinkKey = extractAuditLinkKey(auditLink);
 
     useEffect(() => {
         return () => {
@@ -17,14 +31,14 @@ export default function ShowNewLink({newLink = "", onReset}) {
         };
     }, []);
 
-    const handleCopy = async () => {
-        const didCopy = await copyTextToClipboard(newLink);
+    const handleCopy = async (value, target) => {
+        const didCopy = await copyTextToClipboard(value);
         if (didCopy) {
-            setCopied(true);
+            setCopiedTarget(target);
             if (resetCopiedTimeoutRef.current) {
                 window.clearTimeout(resetCopiedTimeoutRef.current);
             }
-            resetCopiedTimeoutRef.current = window.setTimeout(() => setCopied(false), 3000);
+            resetCopiedTimeoutRef.current = window.setTimeout(() => setCopiedTarget(""), 3000);
         }
     };
 
@@ -77,42 +91,38 @@ export default function ShowNewLink({newLink = "", onReset}) {
                 </svg>
             </div>
             <p className="link-display-label">Your secret link is ready</p>
-            <input
-                className="link-display-input"
-                aria-label="Secret one-time link"
-                onClick={handleCopy}
-                type="text"
-                value={newLink}
-                readOnly
-            />
+            <div className="link-display-group">
+                <p className="link-display-group-label">Recipient link</p>
+                <input
+                    className="link-display-input"
+                    aria-label="Secret one-time link"
+                    onClick={() => handleCopy(newLink, 'recipient')}
+                    type="text"
+                    value={newLink}
+                    readOnly
+                />
+            </div>
+            {auditEnabled && auditLink && (
+                <div className="link-display-group link-display-group-secondary">
+                    <p className="link-display-group-label">Audit link</p>
+                    <input
+                        className="link-display-input"
+                        aria-label="Audit link"
+                        onClick={() => handleCopy(auditLink, 'audit')}
+                        type="text"
+                        value={auditLink}
+                        readOnly
+                    />
+                    <p className="link-display-group-note">Keep this private. Anyone with it can view the open log.</p>
+                </div>
+            )}
             {qrSvg && (
-                <section
-                    aria-live="polite"
-                    style={{
-                        marginTop: 18,
-                        padding: 18,
-                        borderRadius: 'var(--radius-lg)',
-                        border: '1px solid rgba(15, 23, 42, 0.08)',
-                        background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98))',
-                        boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)',
-                    }}
-                >
+                <section className="link-qr-panel" aria-live="polite">
                     <p className="link-display-label" style={{marginBottom: 0}}>Scan from another device</p>
-                    <p style={{margin: '12px auto 0', maxWidth: 360, fontSize: 13, lineHeight: 1.6, color: 'var(--text-muted)'}}>
+                    <p className="link-qr-panel-note">
                         This QR encodes the same one-time link shown above.
                     </p>
-                    <div
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginTop: 12,
-                            padding: 14,
-                            borderRadius: 20,
-                            background: '#ffffff',
-                            boxShadow: 'inset 0 0 0 1px rgba(15, 23, 42, 0.06)',
-                        }}
-                    >
+                    <div className="link-qr-panel-code">
                         <div
                             aria-label="Secret link QR code"
                             dangerouslySetInnerHTML={{__html: qrSvg}}
@@ -123,17 +133,26 @@ export default function ShowNewLink({newLink = "", onReset}) {
             <div className="link-actions">
                 <button
                     className="btn btn-success btn-lg"
-                    onClick={handleCopy}
+                    onClick={() => handleCopy(newLink, 'recipient')}
                     type="button"
                 >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        {copied
+                        {copiedTarget === 'recipient'
                             ? <polyline points="20 6 9 17 4 12"/>
                             : <><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>
                         }
                     </svg>
-                    {copied ? "Copied!" : "Copy link"}
+                    {copiedTarget === 'recipient' ? "Copied!" : "Copy link"}
                 </button>
+                {auditEnabled && auditLink && (
+                    <button
+                        className="btn btn-secondary btn-lg"
+                        onClick={() => handleCopy(auditLink, 'audit')}
+                        type="button"
+                    >
+                        {copiedTarget === 'audit' ? "Audit link copied!" : "Copy audit link"}
+                    </button>
+                )}
                 <button
                     className="btn btn-secondary btn-lg"
                     disabled={isQrLoading}
@@ -161,9 +180,20 @@ export default function ShowNewLink({newLink = "", onReset}) {
                 >Create another</button>
             </div>
             <p className="link-notice">
-                This link works only once. After the recipient opens it, the message is
-                permanently destroyed. Even we cannot read it — encryption happens in your browser.
+                This link stays active until it expires or is no longer available.{' '}
+                {auditEnabled
+                    ? 'The recipient will see a warning before they reveal or download it, and you can monitor opens live below.'
+                    : 'Encryption happens in your browser and the server never sees the plaintext.'}
             </p>
+            {auditEnabled && auditLinkKey && (
+                <div className="link-audit-panel">
+                    <AuditLogPanel
+                        auditLinkKey={auditLinkKey}
+                        heading="Live open log"
+                        emptyState="No opens have been recorded yet. Keep this page open to watch for activity."
+                    />
+                </div>
+            )}
                 </>
             )}
         </div>

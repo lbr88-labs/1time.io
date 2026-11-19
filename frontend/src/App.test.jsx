@@ -74,6 +74,8 @@ describe('NewMessage component', () => {
         expect(screen.getByLabelText(/additional passphrase/i)).toBeInTheDocument();
         expect(screen.getByRole('button', {name: /generate one/i})).toBeInTheDocument();
         expect(screen.getByLabelText(/expire after/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/allowed opens/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/notify me when someone opens it/i)).toBeInTheDocument();
 
         await user.type(screen.getByLabelText(/your secret message/i), 'top secret');
         expect(submitButton).toBeEnabled();
@@ -115,6 +117,9 @@ describe('NewMessage component', () => {
             secretMessage: expect.any(String),
             hashedKey: expect.any(String),
             duration: Constants.defaultDuration * 86400,
+            auditEnabled: false,
+            auditHashedKey: '',
+            maxViews: 1,
         }));
 
         const linkInput = await screen.findByLabelText(/secret one-time link/i);
@@ -153,6 +158,53 @@ describe('ShowNewLink component', () => {
         await screen.findByText(/scan from another device/i);
         expect(await screen.findByLabelText(/secret link qr code/i)).toBeInTheDocument();
     });
+
+    it('shows the audit link and live open log when sender notifications are enabled', async () => {
+        fetch.mockImplementation(async (url) => {
+            if (url === '/api/audit') {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        status: 'ok',
+                        kind: 'text',
+                        createdAt: 1712671200,
+                        expiresAt: 1712757600,
+                        successfulReads: 2,
+                        events: [
+                            {
+                                timestamp: 1712674800,
+                                country: 'US',
+                                network: 'Google LLC',
+                                userAgent: 'Mozilla/5.0',
+                                eventType: 'reveal_success',
+                            },
+                        ],
+                    }),
+                };
+            }
+
+            return {
+                ok: true,
+                json: async () => ({status: 'ok'}),
+            };
+        });
+
+        render(
+            <ShowNewLink
+                newLink="http://localhost:3001/v/#AbCdEfGhIjKlMnOpQr-_testId123"
+                auditLink="http://localhost:3001/a/#tZyXwVuTsRqPoNmLkJiHgtestId123"
+                auditEnabled
+                onReset={vi.fn()}
+            />,
+        );
+
+        expect(await screen.findByLabelText(/audit link/i)).toBeInTheDocument();
+        expect(await screen.findByText(/live open log/i)).toBeInTheDocument();
+        expect(await screen.findByText('2')).toBeInTheDocument();
+        expect(screen.getByText('US')).toBeInTheDocument();
+        expect(screen.getByText('Google LLC')).toBeInTheDocument();
+        expect(screen.queryByText(/5 opens/i)).not.toBeInTheDocument();
+    });
 });
 
 describe('ViewSecretMessage component', () => {
@@ -175,6 +227,40 @@ describe('ViewSecretMessage component', () => {
 
         await screen.findByText(/scan from another device/i);
         expect(await screen.findByLabelText(/secret link qr code/i)).toBeInTheDocument();
+    });
+
+    it('requires acknowledgement before opening when sender notifications are enabled', async () => {
+        const user = userEvent.setup();
+        const randomKey = 'A'.repeat(Constants.randomKeyLen);
+        window.history.pushState({}, '', `/v/#${randomKey}testId123`);
+
+        fetch.mockImplementation(async (url) => {
+            if (url === '/api/info') {
+                return {
+                    ok: true,
+                    json: async () => ({
+                        status: 'ok',
+                        auditEnabled: true,
+                    }),
+                };
+            }
+
+            return {
+                ok: true,
+                json: async () => ({status: 'ok'}),
+            };
+        });
+
+        render(<ViewSecretMessage />);
+
+        expect(await screen.findByText(/sender notification enabled/i)).toBeInTheDocument();
+
+        const submitButton = screen.getByRole('button', {name: /open secret and notify sender/i});
+        expect(submitButton).toBeDisabled();
+
+        await user.click(screen.getByLabelText(/i understand the sender will be notified/i));
+
+        expect(submitButton).toBeEnabled();
     });
 
     it('treats invalid view links as destroyed after submit', async () => {

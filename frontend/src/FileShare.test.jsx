@@ -14,6 +14,8 @@ const fileProtocolMocks = vi.hoisted(() => ({
 const fileApiMocks = vi.hoisted(() => ({
     saveFile: vi.fn(),
     getFile: vi.fn(),
+    getFileInfo: vi.fn(),
+    getAuditLog: vi.fn(),
 }));
 
 const protocolMocks = vi.hoisted(() => ({
@@ -29,6 +31,8 @@ vi.mock('../utils/fileProtocol', () => ({
 vi.mock('../utils/fileApi', () => ({
     saveFile: fileApiMocks.saveFile,
     getFile: fileApiMocks.getFile,
+    getFileInfo: fileApiMocks.getFileInfo,
+    getAuditLog: fileApiMocks.getAuditLog,
 }));
 
 vi.mock('../utils/protocol.mjs', async () => {
@@ -47,6 +51,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     mockClipboardWriteText.mockResolvedValue(undefined);
     protocolMocks.hashSecretKey.mockResolvedValue('hashed-file-key');
+    fileApiMocks.getFileInfo.mockResolvedValue({status: 'ok', auditEnabled: false});
     window.history.pushState({}, '', '/');
     window.scrollTo = vi.fn();
     Object.defineProperty(window.navigator, 'clipboard', {
@@ -68,7 +73,7 @@ describe('SecureFileShare component', () => {
             hashedKey: 'hashed-upload-key',
             randomKey,
         });
-        fileApiMocks.saveFile.mockImplementation(async (_blob, _hashedKey, _duration, onProgress) => {
+        fileApiMocks.saveFile.mockImplementation(async (_blob, _hashedKey, _duration, _options, onProgress) => {
             onProgress(0.55);
             return {
                 status: 'ok',
@@ -90,6 +95,11 @@ describe('SecureFileShare component', () => {
             expect.any(Blob),
             'hashed-upload-key',
             Constants.defaultDuration,
+            {
+                auditEnabled: false,
+                auditHashedKey: '',
+                maxViews: 1,
+            },
             expect.any(Function),
         );
 
@@ -134,6 +144,7 @@ describe('ViewSecretFile component', () => {
 
         expect(protocolMocks.hashSecretKey).toHaveBeenCalledWith(randomKey);
         expect(fileApiMocks.getFile).toHaveBeenCalledWith('file123', 'hashed-file-key');
+        expect(fileApiMocks.getFileInfo).toHaveBeenCalledWith('file123');
     });
 
     it('downloads and destroys the file after successful decryption', async () => {
@@ -161,7 +172,25 @@ describe('ViewSecretFile component', () => {
             expect(fileProtocolMocks.downloadFile).toHaveBeenCalledWith(meta, fileBytes);
         });
 
-        expect(await screen.findByText(/file downloaded and permanently destroyed/i)).toBeInTheDocument();
+        expect(await screen.findByText(/file downloaded successfully/i)).toBeInTheDocument();
         expect(fileApiMocks.getFile).toHaveBeenCalledWith('file123', 'hashed-file-key');
+    });
+
+    it('requires acknowledgement before download when sender notifications are enabled', async () => {
+        const user = userEvent.setup();
+        const randomKey = 'C'.repeat(Constants.randomKeyLen);
+        window.history.pushState({}, '', `/f/#${randomKey}file123`);
+        fileApiMocks.getFileInfo.mockResolvedValue({status: 'ok', auditEnabled: true});
+
+        render(<ViewSecretFile />);
+
+        expect(await screen.findByText(/sender notification enabled/i)).toBeInTheDocument();
+
+        const submitButton = screen.getByRole('button', {name: /download file and notify sender/i});
+        expect(submitButton).toBeDisabled();
+
+        await user.click(screen.getByLabelText(/i understand the sender will be notified/i));
+
+        expect(submitButton).toBeEnabled();
     });
 });

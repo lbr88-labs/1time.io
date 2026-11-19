@@ -48,10 +48,6 @@ error in case of failure
 */
 func saveToStorage(value interface{}, duration time.Duration) (newKey string, err error) {
 	client := getRedisClient()
-	if err = incrementStoredSecretCounters(time.Now().UTC()); err != nil {
-		log.Println(err)
-		return "", err
-	}
 
 	for attempt := 0; attempt < maxStorageIDAttempts; attempt++ {
 		newKey, err = generateStorageID()
@@ -95,7 +91,45 @@ func getFileStoreKey(key string) string {
 	return "fileKey" + key
 }
 
-func consumeFileMessageFromStorage(key string, hashedKey string) (storedFile StoredFile, status string, err error) {
+func getMessageInfo(key string) (shareInfo ShareInfo, status string, err error) {
+	value, err := getRedisClient().Get(getStoreKey(key)).Result()
+	if err == redis.Nil {
+		return ShareInfo{}, "no message", nil
+	}
+	if err != nil {
+		return ShareInfo{}, "error", err
+	}
+
+	var storedMessage StoredMessage
+	if err := json.Unmarshal([]byte(value), &storedMessage); err != nil {
+		return ShareInfo{}, "error", err
+	}
+
+	return ShareInfo{
+		AuditEnabled: storedMessage.AuditEnabled,
+	}, "ok", nil
+}
+
+func getFileInfo(key string) (shareInfo ShareInfo, status string, err error) {
+	value, err := getRedisClient().Get(getFileStoreKey(key)).Result()
+	if err == redis.Nil {
+		return ShareInfo{}, "no message", nil
+	}
+	if err != nil {
+		return ShareInfo{}, "error", err
+	}
+
+	var storedFile StoredFile
+	if err := json.Unmarshal([]byte(value), &storedFile); err != nil {
+		return ShareInfo{}, "error", err
+	}
+
+	return ShareInfo{
+		AuditEnabled: storedFile.AuditEnabled,
+	}, "ok", nil
+}
+
+func consumeFileMessageFromStorage(key string, hashedKey string) (storedFile StoredFile, status string, finalRead bool, err error) {
 	client := getRedisClient()
 	storeKey := getFileStoreKey(key)
 	status = "no message"
@@ -113,26 +147,51 @@ func consumeFileMessageFromStorage(key string, hashedKey string) (storedFile Sto
 		if err := json.Unmarshal([]byte(value), &storedFile); err != nil {
 			return err
 		}
+		storedFile.MaxViews = normalizeMaxViews(storedFile.MaxViews)
 
 		if subtle.ConstantTimeCompare([]byte(storedFile.HashedKey), []byte(hashedKey)) != 1 {
-			storedFile = StoredFile{}
 			status = "wrong key"
 			return nil
 		}
 
+		ttl, err := tx.TTL(storeKey).Result()
+		if err != nil {
+			return err
+		}
+		if ttl <= 0 {
+			storedFile = StoredFile{}
+			status = "no message"
+			return nil
+		}
+
+		nextReadCount := storedFile.ReadCount + 1
+		finalRead = nextReadCount >= storedFile.MaxViews
+
 		_, err = tx.TxPipelined(func(pipe redis.Pipeliner) error {
-			pipe.Del(storeKey)
+			if finalRead {
+				pipe.Del(storeKey)
+				return nil
+			}
+
+			storedFile.ReadCount = nextReadCount
+			updatedValue, err := json.Marshal(storedFile)
+			if err != nil {
+				return err
+			}
+			pipe.Set(storeKey, updatedValue, ttl)
 			return nil
 		})
 		if err == redis.TxFailedErr {
 			storedFile = StoredFile{}
 			status = "no message"
+			finalRead = false
 			return nil
 		}
 		if err != nil {
 			return err
 		}
 
+		storedFile.ReadCount = nextReadCount
 		status = "ok"
 		return nil
 	}, storeKey)
@@ -190,7 +249,7 @@ func cleanupExpiredFiles(now time.Time) error {
 	return nil
 }
 
-func consumeMessageFromStorage(key string, hashedKey string) (storedMessage StoredMessage, status string, err error) {
+func consumeMessageFromStorage(key string, hashedKey string) (storedMessage StoredMessage, status string, finalRead bool, err error) {
 	client := getRedisClient()
 	storeKey := getStoreKey(key)
 	status = "no message"
@@ -208,26 +267,51 @@ func consumeMessageFromStorage(key string, hashedKey string) (storedMessage Stor
 		if err := json.Unmarshal([]byte(value), &storedMessage); err != nil {
 			return err
 		}
+		storedMessage.MaxViews = normalizeMaxViews(storedMessage.MaxViews)
 
 		if subtle.ConstantTimeCompare([]byte(storedMessage.HashedKey), []byte(hashedKey)) != 1 {
-			storedMessage = StoredMessage{}
 			status = "wrong key"
 			return nil
 		}
 
+		ttl, err := tx.TTL(storeKey).Result()
+		if err != nil {
+			return err
+		}
+		if ttl <= 0 {
+			storedMessage = StoredMessage{}
+			status = "no message"
+			return nil
+		}
+
+		nextReadCount := storedMessage.ReadCount + 1
+		finalRead = nextReadCount >= storedMessage.MaxViews
+
 		_, err = tx.TxPipelined(func(pipe redis.Pipeliner) error {
-			pipe.Del(storeKey)
+			if finalRead {
+				pipe.Del(storeKey)
+				return nil
+			}
+
+			storedMessage.ReadCount = nextReadCount
+			updatedValue, err := json.Marshal(storedMessage)
+			if err != nil {
+				return err
+			}
+			pipe.Set(storeKey, updatedValue, ttl)
 			return nil
 		})
 		if err == redis.TxFailedErr {
 			storedMessage = StoredMessage{}
 			status = "no message"
+			finalRead = false
 			return nil
 		}
 		if err != nil {
 			return err
 		}
 
+		storedMessage.ReadCount = nextReadCount
 		status = "ok"
 		return nil
 	}, storeKey)

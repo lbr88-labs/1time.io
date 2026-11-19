@@ -3,17 +3,28 @@
  * Handles multipart upload and binary download
  */
 
-import {Constants} from './util';
+import {Constants, postJson} from './util';
 
 /**
  * Upload encrypted file blob to server
  * Returns { status, newId }
  */
-export function saveFile(encryptedBlob, hashedKey, durationDays, onProgress) {
+export function saveFile(encryptedBlob, hashedKey, durationDays, optionsOrProgress, maybeOnProgress) {
+    const options = typeof optionsOrProgress === 'function' ? {} : (optionsOrProgress || {});
+    const onProgress = typeof optionsOrProgress === 'function' ? optionsOrProgress : maybeOnProgress;
+    const {
+        auditEnabled = false,
+        auditHashedKey = '',
+        maxViews = 1,
+    } = options;
+
     const formData = new FormData();
     formData.append('file', encryptedBlob, 'encrypted.bin');
     formData.append('hashedKey', hashedKey);
     formData.append('duration', String(durationDays * 86400));
+    formData.append('auditEnabled', String(auditEnabled));
+    formData.append('auditHashedKey', auditHashedKey);
+    formData.append('maxViews', String(maxViews));
 
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -53,7 +64,7 @@ export function saveFile(encryptedBlob, hashedKey, durationDays, onProgress) {
 }
 
 /**
- * Download encrypted file blob from server (one-time, deletes on read)
+ * Download encrypted file blob from server
  * Returns Uint8Array of encrypted bytes
  */
 export async function getFile(id, hashedKey) {
@@ -75,4 +86,12 @@ export async function getFile(id, hashedKey) {
 
     const buffer = await response.arrayBuffer();
     return {status: 'ok', data: new Uint8Array(buffer)};
+}
+
+export function getFileInfo(id) {
+    return postJson('fileInfo', {id});
+}
+
+export function getAuditLog(id, kind, auditHashedKey) {
+    return postJson('audit', {id, kind, auditHashedKey});
 }
